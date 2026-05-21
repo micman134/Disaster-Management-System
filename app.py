@@ -208,11 +208,11 @@ def authenticate_user(email, password, firebase):
     except Exception as e:
         error_msg = str(e)
         if 'INVALID_PASSWORD' in error_msg:
-            return {'success': False, 'error': 'Invalid password. Please try again.'}
+            return {'success': False, 'error': 'Invalid Email or password. Please try again.'}
         elif 'EMAIL_NOT_FOUND' in error_msg:
             return {'success': False, 'error': 'Email not found. Please sign up first.'}
         else:
-            return {'success': False, 'error': f'Login Username or password'}
+            return {'success': False, 'error': f'Invalid Email or password. Please try again'}
 
 def create_user_account(email, password, full_name, phone, agency, role, firebase):
     if not validate_email(email):
