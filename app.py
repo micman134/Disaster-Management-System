@@ -68,14 +68,7 @@ st.markdown("""
     .badge-high { background: #f97316; color: white; }
     .badge-medium { background: #eab308; color: white; }
     .badge-low { background: #10b981; color: white; }
-    .auth-container {
-        max-width: 500px;
-        margin: 40px auto;
-        padding: 35px;
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.15);
-    }
+    
     .auth-header {
         text-align: center;
         margin-bottom: 30px;
