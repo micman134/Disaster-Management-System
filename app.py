@@ -212,7 +212,7 @@ def authenticate_user(email, password, firebase):
         elif 'EMAIL_NOT_FOUND' in error_msg:
             return {'success': False, 'error': 'Email not found. Please sign up first.'}
         else:
-            return {'success': False, 'error': f'Login failed: {error_msg}'}
+            return {'success': False, 'error': f'Login Username or password'}
 
 def create_user_account(email, password, full_name, phone, agency, role, firebase):
     if not validate_email(email):
