@@ -608,17 +608,57 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-    
-    page = st.radio(
-        "📋 Navigation",
-        ["Dashboard", "Alerts", "Classify Text"],
-        index=0
-    )
-    
+
+    page = st.session_state.get("page", "Dashboard")
+
+    nav_items = {
+        # Disaster Monitoring
+        "📊 Dashboard":         "Dashboard",
+        "🚨 Live Alerts":       "Alerts",
+        "🗺️ Incident Map":      "Incident Map",
+        "📰 Disaster News":     "Disaster News",
+        "📈 Trend Analysis":    "Trend Analysis",
+        # ML Classification
+        "🤖 Classify Text":     "Classify Text",
+        "📉 Model Performance": "Model Performance",
+        # Location Management
+        "➕ Add Areas":         "Add Areas",
+        "📍 Manage Areas":      "Manage Areas",
+        # User Management
+        "👤 Add User":          "Add User",
+        "👥 Manage Users":      "Manage Users",
+        # Other
+        "🌐 Manage Website":    "Manage Website",
+        "📋 System Logs":       "System Logs",
+    }
+
+    # Section headers
+    section_headers = {
+        "📊 Dashboard":         ("📡 Disaster Monitoring", True),
+        "🤖 Classify Text":     ("🧠 ML Classification", True),
+        "➕ Add Areas":         ("📍 Location Management", True),
+        "👤 Add User":          ("👥 User Management", True),
+        "🌐 Manage Website":    ("⚙️ Administration", True),
+    }
+
+    for label, page_key in nav_items.items():
+        # Insert section header before certain items
+        if label in section_headers:
+            header_text, _ = section_headers[label]
+            st.markdown(f"**{header_text}**")
+
+        is_active = st.session_state.get("page", "Dashboard") == page_key
+        btn_type = "primary" if is_active else "secondary"
+        if st.button(label, key=f"nav_{page_key}", use_container_width=True, type=btn_type):
+            st.session_state["page"] = page_key
+            st.rerun()
+
+    page = st.session_state.get("page", "Dashboard")
+
     st.markdown("---")
     st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    if st.button("🚪 Logout", width='stretch'):
+
+    if st.button("🚪 Logout", use_container_width=True):
         logout()
 
 # ============================================================
@@ -1018,3 +1058,317 @@ elif page == "Classify Text":
     if 'sample_text' in st.session_state:
         st.info(f"Sample loaded. Click 'Classify Text' above to analyze.")
         st.code(st.session_state.sample_text)
+
+# ============================================================
+# INCIDENT MAP PAGE
+# ============================================================
+
+elif page == "Incident Map":
+    st.markdown('<div class="main-header"><h1>🗺️ Incident Map</h1></div>', unsafe_allow_html=True)
+    st.caption(f"📍 Showing {unique_locations_count} locations with active incidents")
+
+    if location_incidents:
+        map_center = [9.0820, 8.6753]
+        m = folium.Map(location=map_center, zoom_start=6, control_scale=True)
+        folium.TileLayer('OpenStreetMap').add_to(m)
+        marker_cluster = MarkerCluster().add_to(m)
+        for location, incidents in location_incidents.items():
+            coords = NIGERIAN_LOCATIONS.get(location.lower(), {'lat': 9.0820, 'lon': 8.6753})
+            highest_urgency = 'low'
+            for inc in incidents:
+                if inc['urgency'] == 'critical':
+                    highest_urgency = 'critical'; break
+                elif inc['urgency'] == 'high' and highest_urgency != 'critical':
+                    highest_urgency = 'high'
+                elif inc['urgency'] == 'medium' and highest_urgency not in ['critical', 'high']:
+                    highest_urgency = 'medium'
+            color_map = {'critical': 'red', 'high': 'orange', 'medium': 'beige', 'low': 'green'}
+            folium.Marker(
+                location=[coords['lat'], coords['lon']],
+                popup=folium.Popup(f"<b>{location}</b><br>{len(incidents)} incident(s)<br>Urgency: {highest_urgency.upper()}", max_width=250),
+                icon=folium.Icon(color=color_map.get(highest_urgency, 'blue'), icon='info-sign')
+            ).add_to(marker_cluster)
+        st_folium(m, width=None, height=600)
+    else:
+        st.info("No incident locations found. Fetch disaster news from the Dashboard to populate the map.")
+
+# ============================================================
+# DISASTER NEWS PAGE
+# ============================================================
+
+elif page == "Disaster News":
+    st.markdown('<div class="main-header"><h1>📰 Disaster News</h1></div>', unsafe_allow_html=True)
+    st.caption(f"Showing {total_articles} articles from the last 7 days")
+
+    if all_articles:
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            filter_urgency = st.selectbox("Filter by urgency", ["All", "critical", "high", "medium", "low"])
+        with filter_col2:
+            filter_type = st.selectbox("Filter by disaster type", ["All"] + list(disaster_types.keys()))
+
+        filtered = all_articles
+        if filter_urgency != "All":
+            filtered = [a for a in filtered if a.get('urgency') == filter_urgency]
+        if filter_type != "All":
+            filtered = [a for a in filtered if a.get('disaster_type') == filter_type]
+
+        st.markdown(f"**{len(filtered)} articles**")
+        for article in filtered[:30]:
+            urgency = article.get('urgency', 'low')
+            source = article.get('source', 'unknown')
+            src_info = SOURCE_INFO.get(source.lower(), SOURCE_INFO['system'])
+            st.markdown(f"""
+                <div style="border-left: 4px solid {src_info['color']}; background: #f9fafb; padding: 1rem; border-radius: 8px; margin-bottom: 0.75rem;">
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: wrap;">
+                        <span class="badge bg-secondary" style="background:{src_info['color']};color:white;padding:2px 8px;border-radius:9999px;font-size:0.75rem;">{src_info['icon']} {source.upper()}</span>
+                        <span class="badge badge-{urgency}" style="padding:2px 8px;border-radius:9999px;font-size:0.75rem;">{urgency.upper()}</span>
+                    </div>
+                    <b>{article.get('title', 'No title')[:150]}</b>
+                    <p style="margin: 0.4rem 0 0 0; color: #555; font-size: 0.9rem;">{article.get('summary', '')[:300]}...</p>
+                    <small style="color:#888;">📅 {str(article.get('published', ''))[:19]}</small>
+                    {'&nbsp;&nbsp;<a href="' + article.get("link","#") + '" target="_blank" class="source-link">Read →</a>' if article.get('link') and article.get('link') != '#' else ''}
+                </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No news articles yet. Fetch news from the Dashboard.")
+
+# ============================================================
+# TREND ANALYSIS PAGE
+# ============================================================
+
+elif page == "Trend Analysis":
+    st.markdown('<div class="main-header"><h1>📈 Trend Analysis</h1></div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if daily_values and any(daily_values):
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=last_7_days_labels, y=daily_values, marker_color='#667eea'))
+            fig.update_layout(title="Daily Incident Count (Last 7 Days)", xaxis_title="Date", yaxis_title="Incidents", height=350)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No trend data available.")
+
+    with col2:
+        if urgency_stats and any(urgency_stats.values()):
+            fig2 = px.bar(
+                x=list(urgency_stats.keys()),
+                y=list(urgency_stats.values()),
+                color=list(urgency_stats.keys()),
+                color_discrete_map={'critical': '#dc2626', 'high': '#f97316', 'medium': '#eab308', 'low': '#10b981'},
+                title="Incidents by Urgency Level"
+            )
+            fig2.update_layout(height=350, showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("No urgency data available.")
+
+    if disaster_types:
+        fig3 = px.bar(
+            x=[d.replace('_', ' ').title() for d in disaster_types.keys()],
+            y=list(disaster_types.values()),
+            title="Incidents by Disaster Type",
+            color_discrete_sequence=['#667eea']
+        )
+        fig3.update_layout(height=350)
+        st.plotly_chart(fig3, use_container_width=True)
+
+# ============================================================
+# MODEL PERFORMANCE PAGE
+# ============================================================
+
+elif page == "Model Performance":
+    st.markdown('<div class="main-header"><h1>📉 Model Performance</h1></div>', unsafe_allow_html=True)
+
+    confidences = [a.get('confidence', 0) for a in articles_with_locations if a.get('confidence')]
+    severities  = [a.get('severity_score', 0) for a in articles_with_locations if a.get('severity_score')]
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("📊 Avg Confidence", f"{int(sum(confidences)/max(len(confidences),1))}%")
+    col2.metric("⚠️ Avg Severity",   f"{int(sum(severities)/max(len(severities),1))}/100")
+    col3.metric("🗂️ Articles Classified", len(articles_with_locations))
+
+    st.markdown("---")
+    st.subheader("Confidence Score Distribution")
+    if confidences:
+        fig = px.histogram(x=confidences, nbins=20, title="ML Confidence Distribution", labels={'x': 'Confidence (%)', 'y': 'Count'}, color_discrete_sequence=['#667eea'])
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No classified articles yet.")
+
+    if disaster_types:
+        st.subheader("Classification Breakdown")
+        df_types = pd.DataFrame({'Type': [d.replace('_', ' ').title() for d in disaster_types.keys()], 'Count': list(disaster_types.values())})
+        st.dataframe(df_types, use_container_width=True, hide_index=True)
+
+# ============================================================
+# ADD AREAS PAGE
+# ============================================================
+
+elif page == "Add Areas":
+    st.markdown('<div class="main-header"><h1>➕ Add Location Area</h1></div>', unsafe_allow_html=True)
+
+    with st.form("add_area_form"):
+        area_name  = st.text_input("📍 Area / Location Name", placeholder="e.g. Ogun State")
+        area_type  = st.selectbox("Type", ["state", "city", "district", "local government area"])
+        risk_level = st.selectbox("Risk Level", ["very_high", "high", "medium", "low"])
+        lat        = st.number_input("Latitude",  value=9.0820, format="%.4f")
+        lon        = st.number_input("Longitude", value=8.6753, format="%.4f")
+        notes      = st.text_area("Notes (optional)", height=80)
+        submitted  = st.form_submit_button("➕ Add Area", type="primary")
+
+        if submitted:
+            if area_name:
+                if firebase:
+                    try:
+                        firebase.add_location({'name': area_name, 'location_type': area_type, 'risk_level': risk_level, 'lat': lat, 'lon': lon, 'notes': notes})
+                        st.success(f"✅ Location '{area_name}' added successfully!")
+                    except Exception as e:
+                        st.error(f"❌ Failed to add location: {e}")
+                else:
+                    st.warning("Firebase not connected.")
+            else:
+                st.warning("Please enter a location name.")
+
+# ============================================================
+# MANAGE AREAS PAGE
+# ============================================================
+
+elif page == "Manage Areas":
+    st.markdown('<div class="main-header"><h1>📍 Manage Location Areas</h1></div>', unsafe_allow_html=True)
+
+    locations = []
+    if firebase:
+        try:
+            locations = firebase.get_locations()
+        except:
+            pass
+
+    if locations:
+        st.metric("Total Locations", len(locations))
+        df_loc = pd.DataFrame([{
+            'Name':       l.get('name', ''),
+            'Type':       l.get('location_type', ''),
+            'Risk Level': l.get('risk_level', ''),
+            'Lat':        l.get('lat', ''),
+            'Lon':        l.get('lon', '')
+        } for l in locations])
+        st.dataframe(df_loc, use_container_width=True, hide_index=True)
+    else:
+        # Fall back to built-in Nigerian locations
+        st.caption("Showing built-in Nigerian locations (no custom areas added yet).")
+        df_built = pd.DataFrame([
+            {'Name': k.title(), 'Type': v['type'], 'Risk Level': v['risk'], 'Lat': v['lat'], 'Lon': v['lon']}
+            for k, v in NIGERIAN_LOCATIONS.items()
+        ])
+        st.dataframe(df_built, use_container_width=True, hide_index=True)
+
+# ============================================================
+# ADD USER PAGE
+# ============================================================
+
+elif page == "Add User":
+    st.markdown('<div class="main-header"><h1>👤 Add New User</h1></div>', unsafe_allow_html=True)
+
+    user_role = st.session_state.get('user_role', 'viewer')
+    if user_role != 'admin':
+        st.warning("⚠️ Only admins can add users.")
+    else:
+        with st.form("add_user_form"):
+            full_name = st.text_input("👤 Full Name")
+            email     = st.text_input("📧 Email")
+            phone     = st.text_input("📱 Phone (optional)")
+            agency    = st.text_input("🏢 Organization / Agency")
+            role      = st.selectbox("🎭 Role", ['viewer', 'responder', 'analyst', 'admin'])
+            password  = st.text_input("🔒 Temporary Password", type="password")
+            submitted = st.form_submit_button("Create User", type="primary")
+
+            if submitted:
+                if full_name and email and password:
+                    result = create_user_account(email, password, full_name, phone, agency, role, firebase)
+                    if result['success']:
+                        st.success(f"✅ User '{full_name}' created successfully!")
+                    else:
+                        st.error(f"❌ {result['error']}")
+                else:
+                    st.warning("Full name, email, and password are required.")
+
+# ============================================================
+# MANAGE USERS PAGE
+# ============================================================
+
+elif page == "Manage Users":
+    st.markdown('<div class="main-header"><h1>👥 Manage Users</h1></div>', unsafe_allow_html=True)
+
+    user_role = st.session_state.get('user_role', 'viewer')
+    if user_role != 'admin':
+        st.warning("⚠️ Only admins can manage users.")
+    else:
+        users = []
+        if firebase:
+            try:
+                users = [doc.to_dict() for doc in firebase.db.collection('users').limit(100).stream()]
+            except Exception as e:
+                st.error(f"Could not load users: {e}")
+
+        if users:
+            st.metric("Total Users", len(users))
+            df_users = pd.DataFrame([{
+                'Name':        u.get('full_name', ''),
+                'Email':       u.get('email', ''),
+                'Role':        u.get('role', ''),
+                'Agency':      u.get('agency', ''),
+                'Active':      '✅' if u.get('is_active') else '❌',
+                'Created':     str(u.get('created_at', ''))[:10]
+            } for u in users])
+            st.dataframe(df_users, use_container_width=True, hide_index=True)
+        else:
+            st.info("No users found.")
+
+# ============================================================
+# MANAGE WEBSITE PAGE
+# ============================================================
+
+elif page == "Manage Website":
+    st.markdown('<div class="main-header"><h1>🌐 Manage Website Settings</h1></div>', unsafe_allow_html=True)
+
+    st.subheader("RSS Feed Sources")
+    if collector:
+        feed_status = collector.get_feed_status()
+        df_feeds = pd.DataFrame([
+            {'Source': k, 'URL': v['url'], 'Active': '✅' if v['active'] else '❌', 'Reliability': f"{int(v['reliability']*100)}%"}
+            for k, v in feed_status.items()
+        ])
+        st.dataframe(df_feeds, use_container_width=True, hide_index=True)
+    else:
+        st.warning("RSS Collector not available.")
+
+    st.markdown("---")
+    st.subheader("⚙️ System Settings")
+    st.info("Additional website configuration options can be added here.")
+
+# ============================================================
+# SYSTEM LOGS PAGE
+# ============================================================
+
+elif page == "System Logs":
+    st.markdown('<div class="main-header"><h1>📋 System Logs</h1></div>', unsafe_allow_html=True)
+
+    logs = []
+    if firebase:
+        try:
+            logs = firebase.get_logs(limit=100)
+        except Exception as e:
+            st.warning(f"Could not load logs: {e}")
+
+    if logs:
+        st.metric("Total Log Entries", len(logs))
+        df_logs = pd.DataFrame([{
+            'Timestamp': str(l.get('timestamp', ''))[:19],
+            'Level':     l.get('level', 'INFO'),
+            'Message':   l.get('message', '')
+        } for l in logs])
+        st.dataframe(df_logs, use_container_width=True, hide_index=True)
+    else:
+        st.info("No system logs found.")
